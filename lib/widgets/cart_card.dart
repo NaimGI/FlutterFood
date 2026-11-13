@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/cart.dart';
+
+import '../models/Cart.dart';
 import '../core/app_images.dart';
 import '../core/app_theme.dart';
 import '../models/meal.dart';
@@ -53,17 +54,22 @@ class CartCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(cart.restaurant,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text(
+                      cart.restaurant,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(cart.organization,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style:
-                            const TextStyle(color: Colors.grey, fontSize: 14)),
+                    Text(
+                      cart.organization,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
                   ],
                 ),
               ),
@@ -72,18 +78,25 @@ class CartCard extends StatelessWidget {
           const Divider(height: 24),
           _row('Items total', _money(cart.totalCartPrice)),
           const SizedBox(height: 6),
-          _row('Delivery',
-              cart.freeDelivery ? 'Free' : _money(cart.deliveryFee)),
+          _row(
+            'Delivery',
+            cart.freeDelivery ? 'Free' : _money(cart.deliveryFee),
+          ),
           const SizedBox(height: 6),
           _row('Total', _money(cart.totalToPay), bold: true),
           const SizedBox(height: 10),
           if (!cart.meetsMinimum)
-            _hint('Minimum order ${_money(cart.minPrice)} '
-                '(add ${_money(cart.missingForMinimum)} more)',
-                AppColors.error)
+            _hint(
+              'Minimum order ${_money(cart.minPrice)} '
+              '(add ${_money(cart.missingForMinimum)} more)',
+              AppColors.error,
+            )
           else if (!cart.freeDelivery && cart.freeDeliveryMinPrice > 0)
-            _hint('Add ${_money(cart.missingForFreeDelivery)} more '
-                'for free delivery', Colors.grey)
+            _hint(
+              'Add ${_money(cart.missingForFreeDelivery)} more '
+              'for free delivery',
+              Colors.grey,
+            )
           else if (cart.freeDelivery)
             _hint('You get free delivery', AppColors.success),
           const SizedBox(height: 12),
@@ -95,15 +108,19 @@ class CartCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor:
-                    AppColors.primary.withValues(alpha: .4),
+                disabledBackgroundColor: AppColors.primary.withValues(
+                  alpha: .4,
+                ),
                 disabledForegroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22)),
+                  borderRadius: BorderRadius.circular(22),
+                ),
               ),
-              child: const Text('CHECKOUT',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              child: const Text(
+                'CHECKOUT',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],
@@ -121,7 +138,10 @@ class CartCard extends StatelessWidget {
     );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [Text(label, style: style), Text(value, style: style)],
+      children: [
+        Text(label, style: style),
+        Text(value, style: style),
+      ],
     );
   }
 }

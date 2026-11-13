@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import '../core/api_constants.dart';
-import '../models/cart.dart';
+import '../models/Cart.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 import 'token_storage.dart';
@@ -11,13 +11,17 @@ class CartService {
   Future<CartPage> getMyCarts() async {
     final userId = await TokenStorage.readUserId();
     if (userId == null || userId.isEmpty) {
-      throw const ApiException('Account not found, please log in again (401)',
-          statusCode: 401);
+      throw const ApiException(
+        'Account not found, please log in again (401)',
+        statusCode: 401,
+      );
     }
 
     final res = await ApiClient.send(
-        'GET', ApiConstants.cartByAccount(userId),
-        allow404: true);
+      'GET',
+      ApiConstants.cartByAccount(userId),
+      allow404: true,
+    );
     if (res.statusCode == 404 || res.body.trim().isEmpty) {
       return const CartPage.empty();
     }
@@ -46,6 +50,7 @@ class CartService {
     String street = '-',
     String building = '-',
     String? premises,
+    int? addressId,
     double minPrice = 0,
     double deliveryPrice = 0,
     double freeDeliveryMinPrice = 0,
@@ -53,8 +58,9 @@ class CartService {
     final accountId = int.tryParse(await TokenStorage.readUserId() ?? '');
     if (accountId == null) {
       throw const ApiException(
-          'Account not found, please log in again (401)',
-          statusCode: 401);
+        'Account not found, please log in again (401)',
+        statusCode: 401,
+      );
     }
 
     final res = await ApiClient.send(
@@ -65,8 +71,9 @@ class CartService {
         'deliveryPrice': deliveryPrice,
         'freeDeliveryMinPrice': freeDeliveryMinPrice,
         'phoneNumber': phoneNumber.isEmpty ? '-' : phoneNumber,
-        'bankAccountNumber':
-            bankAccountNumber.isEmpty ? '-' : bankAccountNumber,
+        'bankAccountNumber': bankAccountNumber.isEmpty
+            ? '-'
+            : bankAccountNumber,
         'note': note,
         'country': country.isEmpty ? '-' : country,
         'city': city.isEmpty ? '-' : city,
@@ -76,6 +83,7 @@ class CartService {
         'organizationId': organizationId,
         'restaurantId': restaurantId,
         'accountId': accountId,
+        if (addressId != null) 'addressId': addressId,
       },
     );
     try {
