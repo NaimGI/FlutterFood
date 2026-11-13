@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../core/app_theme.dart';
 import '../core/responsive.dart';
 import '../models/meal.dart';
+import '../models/saved_address.dart';
+import '../services/address_service.dart';
 import '../services/api_exception.dart';
 import '../services/auth_service.dart';
 import '../services/cart_draft.dart';
@@ -15,6 +17,7 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/primary_button.dart';
 import 'login_screen.dart';
+import 'saved_locations_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -30,17 +33,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _cityCtrl = TextEditingController();
   final _streetCtrl = TextEditingController();
   final _buildingCtrl = TextEditingController();
+  final _premisesCtrl = TextEditingController();
+  final _locationLabelCtrl = TextEditingController(text: 'Home');
   final _notesCtrl = TextEditingController();
 
   List<Organization> _orgs = [];
+  List<SavedAddress> _addresses = [];
   int? _orgId;
+  int? _selectedAddressId;
   bool _loadingOrgs = true;
+  bool _loadingAddresses = true;
+  String? _addressError;
+  bool _saveLocation = true;
   bool _placing = false;
 
   @override
   void initState() {
     super.initState();
     _loadOrgs();
+    _loadAddresses();
   }
 
   @override
@@ -50,8 +61,103 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _cityCtrl.dispose();
     _streetCtrl.dispose();
     _buildingCtrl.dispose();
+    _premisesCtrl.dispose();
+    _locationLabelCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAddresses() async {
+    setState(() {
+      _loadingAddresses = true;
+      _addressError = null;
+    });
+    try {
+      final addresses = await AddressService().getMine();
+      if (!mounted) return;
+      final defaults = addresses.where((address) => address.isDefault).toList();
+      setState(() {
+        _addresses = addresses;
+        _selectedAddressId = defaults.isNotEmpty ? defaults.first.id : null;
+        _loadingAddresses = false;
+        _addressError = null;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _addressError = error.message;
+        _loadingAddresses = false;
+      });
+    }
+  }
+
+  Widget _buildAddressPicker() {
+    if (_loadingAddresses) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_addressError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Saved locations could not be loaded: $_addressError',
+              style: const TextStyle(color: AppColors.error),
+            ),
+          ),
+        if (_addresses.isNotEmpty) ...[
+          DropdownButtonFormField<int>(
+            initialValue: _selectedAddressId ?? 0,
+            decoration: const InputDecoration(labelText: 'Delivery location'),
+            isExpanded: true,
+            items: [
+              const DropdownMenuItem(
+                value: 0,
+                child: Text('Enter a new address'),
+              ),
+              ..._addresses.map(
+                (address) => DropdownMenuItem(
+                  value: address.id,
+                  child: Text(
+                    '${address.label}${address.isDefault ? ' • Default' : ''} — ${address.formattedAddress}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: (value) => setState(
+              () => _selectedAddressId = value == null || value == 0
+                  ? null
+                  : value,
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SavedLocationsScreen(),
+                  ),
+                );
+                _loadAddresses();
+              },
+              icon: const Icon(Icons.settings_outlined),
+              label: const Text('Manage saved locations'),
+            ),
+          ),
+        ] else
+          const Text(
+            'Add a delivery address below. You can save it to your profile for next time.',
+            style: TextStyle(color: Colors.black54),
+          ),
+      ],
+    );
   }
 
   Future<void> _loadOrgs() async {
@@ -94,9 +200,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     try {
       final userId = int.tryParse(await TokenStorage.readUserId() ?? '');
       if (userId == null) {
-        throw const ApiException('Account not found, please log in again (401)',
-            statusCode: 401);
+        throw const ApiException(
+          'Account not found, please log in again (401)',
+          statusCode: 401,
+        );
       }
+      int? addressId = _selectedAddressId;
+      if (addressId == null && _saveLocation) {
+        final saved = await AddressService().create(
+          SavedAddress(
+            id: 0,
+            label: _locationLabelCtrl.text.trim().isEmpty
+                ? 'Home'
+                : _locationLabelCtrl.text.trim(),
+            country: _countryCtrl.text.trim(),
+            city: _cityCtrl.text.trim(),
+            street: _streetCtrl.text.trim(),
+            building: _buildingCtrl.text.trim(),
+            premises: _premisesCtrl.text.trim().isEmpty
+                ? null
+                : _premisesCtrl.text.trim(),
+            isDefault: _addresses.isEmpty,
+          ),
+        );
+        addressId = saved.id;
+      }
+
       final cartId = await CartService().createCart(
         restaurantId: draft.restaurant!.id,
         organizationId: _orgId!,
@@ -105,6 +234,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         city: _cityCtrl.text.trim(),
         street: _streetCtrl.text.trim(),
         building: _buildingCtrl.text.trim(),
+        premises: _premisesCtrl.text.trim(),
+        addressId: addressId,
       );
       final orderId = await OrderService().create(
         cartId: cartId,
@@ -114,9 +245,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
       for (final line in draft.value) {
         await MealService().addToOrder(
-            orderId: orderId,
-            mealId: line.meal.id,
-            quantity: line.quantity);
+          orderId: orderId,
+          mealId: line.meal.id,
+          quantity: line.quantity,
+        );
       }
       draft.clear();
       if (!mounted) return;
@@ -141,8 +273,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Checkout',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text(
+          'Checkout',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
       ),
       body: SafeArea(
         child: draft.isEmpty
@@ -157,18 +291,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           key: _formKey,
                           child: ListView(
                             padding: EdgeInsets.fromLTRB(
-                                16, 12, 16, 16 + bottomInset * 0.3),
+                              16,
+                              12,
+                              16,
+                              16 + bottomInset * 0.3,
+                            ),
                             children: [
                               _buildSummary(draft),
                               const SizedBox(height: 20),
-                              const Text('Delivery details',
-                                  style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800)),
+                              const Text(
+                                'Delivery details',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                               const SizedBox(height: 10),
                               _loadingOrgs
                                   ? const Center(
-                                      child: CircularProgressIndicator())
+                                      child: CircularProgressIndicator(),
+                                    )
                                   : DropdownButtonFormField<int>(
                                       initialValue: _orgId,
                                       decoration: const InputDecoration(
@@ -176,12 +318,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                       ),
                                       isExpanded: true,
                                       items: _orgs
-                                          .map((o) =>
-                                              DropdownMenuItem(
-                                                  value: o.id,
-                                                  child: Text(o.name,
-                                                      overflow: TextOverflow
-                                                          .ellipsis)))
+                                          .map(
+                                            (o) => DropdownMenuItem(
+                                              value: o.id,
+                                              child: Text(
+                                                o.name,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          )
                                           .toList(),
                                       onChanged: (v) =>
                                           setState(() => _orgId = v),
@@ -190,6 +335,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                           : null,
                                     ),
                               const SizedBox(height: 12),
+                              _buildAddressPicker(),
+                              const SizedBox(height: 12),
                               AppTextField(
                                 label: 'Phone',
                                 hint: 'e.g. +123456789',
@@ -197,56 +344,83 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 keyboardType: TextInputType.phone,
                                 validator: (v) =>
                                     (v == null || v.trim().isEmpty)
-                                        ? 'Phone is required'
+                                    ? 'Phone is required'
+                                    : null,
+                              ),
+                              const SizedBox(height: 12),
+                              if (_selectedAddressId == null) ...[
+                                const SizedBox(height: 12),
+                                AppTextField(
+                                  label: 'Location name',
+                                  hint: 'e.g. Home or Work',
+                                  controller: _locationLabelCtrl,
+                                ),
+                                const SizedBox(height: 12),
+                                ResponsiveTwoCol(
+                                  first: AppTextField(
+                                    label: 'Country',
+                                    hint: 'e.g. Morocco',
+                                    controller: _countryCtrl,
+                                    validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                        ? 'Country is required'
                                         : null,
-                              ),
+                                  ),
+                                  second: AppTextField(
+                                    label: 'City',
+                                    hint: 'e.g. Casablanca',
+                                    controller: _cityCtrl,
+                                    validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                        ? 'City is required'
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ResponsiveTwoCol(
+                                  first: AppTextField(
+                                    label: 'Street',
+                                    hint: 'Street name',
+                                    controller: _streetCtrl,
+                                    validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                        ? 'Street is required'
+                                        : null,
+                                  ),
+                                  second: AppTextField(
+                                    label: 'Building',
+                                    hint: 'Building or house number',
+                                    controller: _buildingCtrl,
+                                    textInputAction: TextInputAction.next,
+                                    validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                        ? 'Building is required'
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                AppTextField(
+                                  label: 'Apartment or additional details (optional)',
+                                  hint: 'Apartment, floor, entrance',
+                                  controller: _premisesCtrl,
+                                ),
+                                CheckboxListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  value: _saveLocation,
+                                  title: const Text(
+                                    'Save this location to my profile',
+                                  ),
+                                  activeColor: AppColors.primary,
+                                  onChanged: (value) => setState(
+                                    () => _saveLocation = value ?? false,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 12),
-                              ResponsiveTwoCol(
-                                first: AppTextField(
-                                  label: 'Country',
-                                  hint: 'e.g. USA',
-                                  controller: _countryCtrl,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Country is required'
-                                          : null,
-                                ),
-                                second: AppTextField(
-                                  label: 'City',
-                                  hint: 'e.g. New York',
-                                  controller: _cityCtrl,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'City is required'
-                                          : null,
-                                ),
+                              const Text(
+                                'Note (optional)',
+                                style: TextStyle(fontWeight: FontWeight.w700),
                               ),
-                              const SizedBox(height: 12),
-                              ResponsiveTwoCol(
-                                first: AppTextField(
-                                  label: 'Street',
-                                  hint: 'e.g. Main St',
-                                  controller: _streetCtrl,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Street is required'
-                                          : null,
-                                ),
-                                second: AppTextField(
-                                  label: 'Building',
-                                  hint: 'e.g. 12A',
-                                  controller: _buildingCtrl,
-                                  textInputAction: TextInputAction.next,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Building is required'
-                                          : null,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              const Text('Note (optional)',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w700)),
                               const SizedBox(height: 6),
                               TextField(
                                 controller: _notesCtrl,
@@ -255,8 +429,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 maxLength: 200,
                                 textInputAction: TextInputAction.done,
                                 decoration: const InputDecoration(
-                                  hintText:
-                                      'e.g. no onions (optional)',
+                                  hintText: 'e.g. no onions (optional)',
                                 ),
                               ),
                               // Spacer so last field is never hidden
@@ -299,13 +472,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                    '${draft.count} ${draft.count == 1 ? 'item' : 'items'}',
-                    style: const TextStyle(color: Colors.grey)),
-                Text(_money(draft.itemsTotal),
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primary)),
+                  '${draft.count} ${draft.count == 1 ? 'item' : 'items'}',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                Text(
+                  _money(draft.itemsTotal),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -330,43 +507,58 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(draft.restaurant?.name ?? '',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style:
-                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+          Text(
+            draft.restaurant?.name ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+          ),
           const Divider(height: 20),
-          ...draft.value.map((e) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    Text('${e.quantity}×',
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w800)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: Text(e.meal.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 8),
-                    Text(_money(e.lineTotal),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              )),
+          ...draft.value.map(
+            (e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  Text(
+                    '${e.quantity}×',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      e.meal.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _money(e.lineTotal),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const Divider(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Total to pay',
-                  style: TextStyle(fontWeight: FontWeight.w800)),
-              Text(_money(draft.itemsTotal),
-                  style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary)),
+              const Text(
+                'Total to pay',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              Text(
+                _money(draft.itemsTotal),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
             ],
           ),
         ],

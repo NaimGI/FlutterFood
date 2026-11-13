@@ -1,15 +1,26 @@
 import 'dart:io';
 
 class ApiConstants {
-  // Android emulator cannot reach the PC's "localhost" -> use 10.0.2.2.
-  // Windows desktop / iOS simulator can use localhost.
+  static const _configuredHost = String.fromEnvironment('API_HOST');
+
   static String get host {
-    if (Platform.isAndroid) return 'https://10.66.206.8:7157';
+    if (_configuredHost.isNotEmpty) return _configuredHost;
+    // Android emulator cannot reach the PC's "localhost" -> use 10.0.2.2.
+    if (Platform.isAndroid) return 'https://10.0.2.2:7157';
+    // Windows desktop / iOS simulator can use localhost.
     return 'https://localhost:7157';
   }
 
   static String get register => '$host/api/account/register';
   static String get login => '$host/api/account/login';
+  static String get profile => '$host/api/account/profile';
+  static String get changePassword => '$host/api/account/password';
+
+  // Saved delivery locations
+  static String get addresses => '$host/api/address';
+  static String get myAddresses => '$host/api/address/mine';
+  static String address(int id) => '$host/api/address/$id';
+  static String addressDefault(int id) => '$host/api/address/$id/default';
 
   // Restaurant
   static String get restaurants => '$host/api/restaurant/all';
@@ -24,7 +35,8 @@ class ApiConstants {
   static String mealsByRestaurant(int restaurantId) =>
       '$host/api/meal/restaurant/$restaurantId/all';
   static String mealsByOrder(int orderId) => '$host/api/meal/order/$orderId';
-  static String mealAddToOrder(int orderId) => '$host/api/meal/addMeal/$orderId';
+  static String mealAddToOrder(int orderId) =>
+      '$host/api/meal/addMeal/$orderId';
   static String mealRemoveFromOrder(int orderId) =>
       '$host/api/meal/removeMeal/$orderId';
 
