@@ -24,6 +24,12 @@ class MealItem {
       required this.lineTotal});
 }
 
+class CalorieEstimate {
+  final double calories;
+  final String explanation;
+  const CalorieEstimate(this.calories, this.explanation);
+}
+
 class MealService {
   Map<String, String> _headers(String token) => {
         'Accept': 'application/json',
@@ -142,6 +148,15 @@ class MealService {
 
   Future<void> delete(int id) async {
     await ApiClient.send('DELETE', ApiConstants.mealDelete(id));
+  }
+
+  Future<CalorieEstimate> estimateCalories({required String name, String? description}) async {
+    final res = await ApiClient.send('POST', ApiConstants.calorieEstimate, body: {
+      'name': name,
+      if (description != null) 'description': description,
+    });
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return CalorieEstimate((data['calories'] as num).toDouble(), (data['explanation'] ?? '').toString());
   }
 
   Future<void> addToOrder(

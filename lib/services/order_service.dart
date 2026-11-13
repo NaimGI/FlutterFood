@@ -14,6 +14,8 @@ class OrderService {
     required int accountId,
     double totalPrice = 0,
     String? notes,
+    bool isPriority = false,
+    bool isBadWeather = false,
   }) async {
     final res = await ApiClient.send(
       'POST',
@@ -23,6 +25,8 @@ class OrderService {
         'cartId': cartId,
         'accountId': accountId,
         'totalPrice': double.parse(totalPrice.toStringAsFixed(2)),
+        'isPriority': isPriority,
+        'isBadWeather': isBadWeather,
       },
     );
     final loc = res.headers['location'] ?? res.headers['Location'];
@@ -79,6 +83,16 @@ class OrderService {
   Future<void> updateNotes({required int id, required String notes}) =>
       ApiClient.send('PUT', ApiConstants.orderUpdate(id),
           body: {'notes': notes});
+
+  Future<void> rate({required int orderId, required int accountId, required int score, String? comment}) =>
+      ApiClient.send('POST', ApiConstants.orderRating(orderId), body: {
+        'accountId': accountId, 'score': score, if (comment != null) 'comment': comment,
+      });
+
+  Future<void> report({required int orderId, required int accountId, required int type, required String description, int? mealId}) =>
+      ApiClient.send('POST', ApiConstants.orderReport(orderId), body: {
+        'accountId': accountId, 'type': type, 'description': description, if (mealId != null) 'mealId': mealId,
+      });
 
   /// DELETE /api/order/delete/{id}
   Future<void> delete(int orderId) =>

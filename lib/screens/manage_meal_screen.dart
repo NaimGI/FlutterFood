@@ -293,6 +293,7 @@ class _MealFormBodyState extends State<_MealFormBody> {
   late final TextEditingController _priceCtrl;
   late final TextEditingController _imgCtrl;
   bool _loading = false;
+  CalorieEstimate? _estimate;
 
   bool get _isEdit => widget.meal != null;
 
@@ -354,6 +355,23 @@ class _MealFormBodyState extends State<_MealFormBody> {
     }
   }
 
+  Future<void> _estimateCalories() async {
+    if (_nameCtrl.text.trim().isEmpty) {
+      AppSnackbar.error(context, 'Enter a meal name first');
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final estimate = await MealService().estimateCalories(
+        name: _nameCtrl.text.trim(), description: _descCtrl.text.trim());
+      if (mounted) setState(() => _estimate = estimate);
+    } on ApiException catch (e) {
+      if (mounted) AppSnackbar.error(context, e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -400,6 +418,18 @@ class _MealFormBodyState extends State<_MealFormBody> {
               controller: _imgCtrl,
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.done),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _loading ? null : _estimateCalories,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text('Estimate calories'),
+          ),
+          if (_estimate != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Estimated: ${_estimate!.calories.round()} kcal — ${_estimate!.explanation}',
+                  style: const TextStyle(color: Colors.blueGrey)),
+            ),
           const SizedBox(height: 20),
           PrimaryButton(
               text: _isEdit ? 'Save changes' : 'Add meal',

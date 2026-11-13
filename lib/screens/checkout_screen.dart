@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:my_flutter_app/widgets/max_width.dart';
 
 import '../core/app_theme.dart';
-import '../core/responsive.dart';
 import '../models/meal.dart';
 import '../services/api_exception.dart';
 import '../services/auth_service.dart';
@@ -11,8 +11,10 @@ import '../services/meal_service.dart';
 import '../services/order_service.dart';
 import '../services/organization_service.dart';
 import '../services/token_storage.dart';
+import '../services/delivery_profile_storage.dart';
+import '../models/delivery_profile.dart';
+import 'profile_screen.dart';
 import '../widgets/app_snackbar.dart';
-import '../widgets/app_text_field.dart';
 import '../widgets/primary_button.dart';
 import 'login_screen.dart';
 
@@ -35,12 +37,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   List<Organization> _orgs = [];
   int? _orgId;
   bool _loadingOrgs = true;
+  bool _loadingProfile = true;
+  DeliveryProfile? _deliveryProfile;
   bool _placing = false;
+  bool _isPriority = false;
+  bool _isBadWeather = false;
 
   @override
   void initState() {
     super.initState();
     _loadOrgs();
+    _loadDeliveryProfile();
   }
 
   @override
@@ -69,7 +76,47 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  Future<void> _loadDeliveryProfile() async {
+    final profile = await DeliveryProfileStorage.read();
+    if (!mounted) return;
+    setState(() {
+      _deliveryProfile = profile;
+      _loadingProfile = false;
+      _phoneCtrl.text = profile?.phone ?? '';
+      _countryCtrl.text = profile?.country ?? '';
+      _cityCtrl.text = profile?.city ?? '';
+      _streetCtrl.text = profile?.street ?? '';
+      _buildingCtrl.text = profile?.building ?? '';
+    });
+  }
+
   String _money(double v) => '${Meal.currency}${v.toStringAsFixed(2)}';
+
+  Widget _buildDeliveryProfileCard() {
+    final profile = _deliveryProfile;
+    final ready = profile?.isComplete == true;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ready ? AppColors.fieldFill : const Color(0xFFFFF3E8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ready ? Colors.transparent : AppColors.primary.withValues(alpha: .35)),
+      ),
+      child: Row(children: [
+        Container(width: 42, height: 42, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .12), shape: BoxShape.circle), child: const Icon(Icons.location_on_outlined, color: AppColors.primary)),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(ready ? 'Saved delivery address' : 'Delivery details needed', style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text(ready ? '${profile!.phone}\n${profile.addressLabel}' : 'Save your phone and address once in Profile.', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.blueGrey, fontSize: 13)),
+        ])),
+        TextButton(onPressed: () async {
+          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
+          _loadDeliveryProfile();
+        }, child: Text(ready ? 'Change' : 'Set up')),
+      ]),
+    );
+  }
 
   Future<void> _goLogin() async {
     await AuthService().logout();
@@ -88,6 +135,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_orgId == null) {
       AppSnackbar.error(context, 'Please select an organization');
+      return;
+    }
+    if (_deliveryProfile?.isComplete != true) {
+      AppSnackbar.error(context, 'Add your delivery details in Profile first');
       return;
     }
     setState(() => _placing = true);
@@ -111,6 +162,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         accountId: userId,
         totalPrice: 0,
         notes: _notesCtrl.text.trim(),
+        isPriority: _isPriority,
+        isBadWeather: _isBadWeather,
       );
       for (final line in draft.value) {
         await MealService().addToOrder(
@@ -190,58 +243,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                           : null,
                                     ),
                               const SizedBox(height: 12),
-                              AppTextField(
-                                label: 'Phone',
-                                hint: 'e.g. +123456789',
-                                controller: _phoneCtrl,
-                                keyboardType: TextInputType.phone,
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                        ? 'Phone is required'
-                                        : null,
-                              ),
+                              _loadingProfile
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : _buildDeliveryProfileCard(),
                               const SizedBox(height: 12),
-                              ResponsiveTwoCol(
-                                first: AppTextField(
-                                  label: 'Country',
-                                  hint: 'e.g. USA',
-                                  controller: _countryCtrl,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Country is required'
-                                          : null,
-                                ),
-                                second: AppTextField(
-                                  label: 'City',
-                                  hint: 'e.g. New York',
-                                  controller: _cityCtrl,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'City is required'
-                                          : null,
-                                ),
+                              SwitchListTile.adaptive(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Priority delivery'),
+                                subtitle: const Text('Express delivery fee applies'),
+                                value: _isPriority,
+                                onChanged: (v) => setState(() => _isPriority = v),
                               ),
-                              const SizedBox(height: 12),
-                              ResponsiveTwoCol(
-                                first: AppTextField(
-                                  label: 'Street',
-                                  hint: 'e.g. Main St',
-                                  controller: _streetCtrl,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Street is required'
-                                          : null,
-                                ),
-                                second: AppTextField(
-                                  label: 'Building',
-                                  hint: 'e.g. 12A',
-                                  controller: _buildingCtrl,
-                                  textInputAction: TextInputAction.next,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Building is required'
-                                          : null,
-                                ),
+                              SwitchListTile.adaptive(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Bad weather delivery'),
+                                subtitle: const Text('Weather surcharge applies'),
+                                value: _isBadWeather,
+                                onChanged: (v) => setState(() => _isBadWeather = v),
                               ),
                               const SizedBox(height: 12),
                               const Text('Note (optional)',

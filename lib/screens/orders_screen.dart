@@ -7,6 +7,7 @@ import '../services/api_exception.dart';
 import '../services/auth_service.dart';
 import '../services/meal_service.dart';
 import '../services/order_service.dart';
+import '../services/token_storage.dart';
 import '../widgets/app_sheet.dart';
 import '../widgets/app_snackbar.dart';
 import 'login_screen.dart';
@@ -166,6 +167,48 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
+  Future<int?> _accountId() async => int.tryParse(await TokenStorage.readUserId() ?? '');
+
+  Future<void> _rate(Order order) async {
+    var score = 5;
+    final comment = TextEditingController();
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: Text('Rate order #${order.id}'),
+      content: StatefulBuilder(builder: (_, setLocal) => Column(mainAxisSize: MainAxisSize.min, children: [
+        DropdownButtonFormField<int>(initialValue: score, items: List.generate(5, (i) => DropdownMenuItem(value: i + 1, child: Text('${i + 1} stars'))), onChanged: (v) => setLocal(() => score = v ?? score)),
+        TextField(controller: comment, maxLength: 500, decoration: const InputDecoration(labelText: 'Comment (optional)')),
+      ])),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit'))],
+    ));
+    if (confirmed != true) return;
+    final accountId = await _accountId();
+    if (accountId == null) return;
+    setState(() => _busy.add(order.id));
+    try {
+      await _service.rate(orderId: order.id, accountId: accountId, score: score, comment: comment.text.trim());
+      if (mounted) AppSnackbar.success(context, 'Thank you for your rating');
+    } on ApiException catch (e) { if (mounted) AppSnackbar.error(context, e.message); }
+    finally { if (mounted) setState(() => _busy.remove(order.id)); }
+  }
+
+  Future<void> _report(Order order) async {
+    final description = TextEditingController();
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: Text('Report order #${order.id}'),
+      content: TextField(controller: description, minLines: 3, maxLines: 5, maxLength: 1000, decoration: const InputDecoration(hintText: 'Tell us what went wrong')),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send report'))],
+    ));
+    if (confirmed != true || description.text.trim().isEmpty) return;
+    final accountId = await _accountId();
+    if (accountId == null) return;
+    setState(() => _busy.add(order.id));
+    try {
+      await _service.report(orderId: order.id, accountId: accountId, type: 0, description: description.text.trim());
+      if (mounted) AppSnackbar.success(context, 'Report sent');
+    } on ApiException catch (e) { if (mounted) AppSnackbar.error(context, e.message); }
+    finally { if (mounted) setState(() => _busy.remove(order.id)); }
+  }
+
   String _money(double v) => '${Meal.currency}${v.toStringAsFixed(2)}';
 
   @override
@@ -286,6 +329,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
             busy: busy,
             onDelete: () => _delete(order),
             onEdit: () => _editNotes(order),
+            onRate: () => _rate(order),
+            onReport: () => _report(order),
           );
         },
       ),
@@ -299,13 +344,17 @@ class _OrderTile extends StatefulWidget {
   final bool busy;
   final VoidCallback onDelete;
   final VoidCallback onEdit;
+  final VoidCallback onRate;
+  final VoidCallback onReport;
 
   const _OrderTile(
       {required this.order,
       required this.items,
       required this.busy,
       required this.onDelete,
-      required this.onEdit});
+      required this.onEdit,
+      required this.onRate,
+      required this.onReport});
 
   @override
   State<_OrderTile> createState() => _OrderTileState();
@@ -424,12 +473,25 @@ class _OrderTileState extends State<_OrderTile> {
                       style: const TextStyle(
                           color: Colors.grey, fontSize: 12)),
                 ),
-              Row(
+              Wrap(
+                spacing: 2,
+                runSpacing: 2,
+                alignment: WrapAlignment.spaceBetween,
                 children: [
                   TextButton.icon(
                     onPressed: widget.busy ? null : widget.onEdit,
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     label: const Text('Edit note'),
+                  ),
+                  TextButton.icon(
+                    onPressed: widget.busy ? null : widget.onRate,
+                    icon: const Icon(Icons.star_outline, size: 18),
+                    label: const Text('Rate'),
+                  ),
+                  TextButton.icon(
+                    onPressed: widget.busy ? null : widget.onReport,
+                    icon: const Icon(Icons.report_outlined, size: 18),
+                    label: const Text('Report'),
                   ),
                   const Spacer(),
                   TextButton.icon(

@@ -4,7 +4,7 @@ class ApiConstants {
   // Android emulator cannot reach the PC's "localhost" -> use 10.0.2.2.
   // Windows desktop / iOS simulator can use localhost.
   static String get host {
-    if (Platform.isAndroid) return 'https://10.66.206.8:7157';
+    if (Platform.isAndroid) return 'https://10.162.52.8:7157';
     return 'https://localhost:7157';
   }
 
@@ -41,6 +41,10 @@ class ApiConstants {
   static String orderGet(int id) => '$host/api/order/get/$id';
   static String orderUpdate(int id) => '$host/api/order/update/$id';
   static String orderDelete(int orderId) => '$host/api/order/delete/$orderId';
+  static String orderRating(int orderId) => '$host/api/order/$orderId/rating';
+  static String orderReport(int orderId) => '$host/api/order/$orderId/report';
+  static String get pricingQuote => '$host/api/pricing/quote';
+  static String get calorieEstimate => '$host/api/calories/estimate';
   static String ordersByAccount(String accountId) =>
       '$host/api/order/account/$accountId/all';
 
