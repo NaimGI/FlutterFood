@@ -8,6 +8,8 @@ import '../services/auth_service.dart';
 import '../services/cart_draft.dart';
 import '../services/profile_service.dart';
 import '../services/token_storage.dart';
+import '../services/delivery_profile_storage.dart';
+import '../models/delivery_profile.dart';
 import 'login_screen.dart';
 import 'profile_settings_screen.dart';
 import 'saved_locations_screen.dart';
@@ -26,6 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _locationCount = 0;
   double? _totalSpent;
   String? _loadError;
+  DeliveryProfile? _deliveryProfile;
 
   @override
   void initState() {
@@ -37,6 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final u = await TokenStorage.readUsername();
     final id = await TokenStorage.readUserId();
     final admin = await TokenStorage.isAdmin();
+    final delivery = await DeliveryProfileStorage.read();
     try {
       final profile = await ProfileService().getProfile();
       await TokenStorage.saveUsername(profile.login);
@@ -49,6 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isAdmin = admin;
         _locationCount = addresses.length;
         _totalSpent = profile.totalSpent;
+        _deliveryProfile = delivery;
         _loadError = null;
       });
       return;
@@ -61,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _username = u;
       _userId = id;
       _isAdmin = admin;
+      _deliveryProfile = delivery;
     });
   }
 
@@ -72,6 +78,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,
     );
+  }
+
+  Future<void> _editDeliveryProfile() async {
+    final current = _deliveryProfile;
+    final phone = TextEditingController(text: current?.phone ?? '');
+    final country = TextEditingController(text: current?.country ?? '');
+    final city = TextEditingController(text: current?.city ?? '');
+    final street = TextEditingController(text: current?.street ?? '');
+    final building = TextEditingController(text: current?.building ?? '');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delivery information'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: phone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone number'),
+              ),
+              TextField(
+                controller: country,
+                decoration: const InputDecoration(labelText: 'Country'),
+              ),
+              TextField(
+                controller: city,
+                decoration: const InputDecoration(labelText: 'City'),
+              ),
+              TextField(
+                controller: street,
+                decoration: const InputDecoration(labelText: 'Street'),
+              ),
+              TextField(
+                controller: building,
+                decoration: const InputDecoration(
+                  labelText: 'Building / apartment',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true) return;
+    final updated = DeliveryProfile(
+      phone: phone.text.trim(),
+      country: country.text.trim(),
+      city: city.text.trim(),
+      street: street.text.trim(),
+      building: building.text.trim(),
+      latitude: current?.latitude,
+      longitude: current?.longitude,
+    );
+    await DeliveryProfileStorage.save(updated);
+    if (mounted) setState(() => _deliveryProfile = updated);
   }
 
   @override
@@ -219,6 +292,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   },
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: ListTile(
+              leading: const Icon(
+                Icons.location_on_outlined,
+                color: AppColors.primary,
+              ),
+              title: const Text(
+                'Delivery details',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                _deliveryProfile?.isComplete == true
+                    ? '${_deliveryProfile!.phone}\n${_deliveryProfile!.addressLabel}'
+                    : 'Add once and use automatically at checkout',
+              ),
+              isThreeLine: _deliveryProfile?.isComplete == true,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _editDeliveryProfile,
             ),
           ),
           const SizedBox(height: 16),
