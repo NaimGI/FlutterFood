@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:my_flutter_app/screens/admin_reports_screen.dart';
 import 'package:my_flutter_app/screens/manage_meal_screen.dart';
 import 'package:my_flutter_app/screens/manage_restaurant_screen.dart';
 import 'package:my_flutter_app/screens/profile_screen.dart';
@@ -48,6 +49,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
       _RestaurantsTab(onSessionExpired: _logout),
       ManageRestaurantScreen(key: _manageRestaurantKey),
       ManageMealScreen(key: _manageMealKey),
+      const AdminReportsScreen(),
       const ProfileScreen(),
     ];
 
@@ -65,6 +67,8 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               icon: Icon(Icons.restaurant), label: 'Restaurants'),
           BottomNavigationBarItem(
               icon: Icon(Icons.fastfood_outlined), label: 'Meals'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.flag_outlined), label: 'Reports'),
           BottomNavigationBarItem(
               icon: Icon(Icons.person_outline), label: 'Profile'),
         ],

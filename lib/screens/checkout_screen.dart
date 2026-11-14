@@ -242,11 +242,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                           ? 'Select an organization'
                                           : null,
                                     ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               _loadingProfile
                                   ? const Center(child: CircularProgressIndicator())
                                   : _buildDeliveryProfileCard(),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               SwitchListTile.adaptive(
                                 contentPadding: EdgeInsets.zero,
                                 title: const Text('Priority delivery'),
@@ -261,7 +261,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 value: _isBadWeather,
                                 onChanged: (v) => setState(() => _isBadWeather = v),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               const Text('Note (optional)',
                                   style: TextStyle(
                                       fontWeight: FontWeight.w700)),

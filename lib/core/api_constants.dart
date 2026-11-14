@@ -48,6 +48,10 @@ class ApiConstants {
   static String ordersByAccount(String accountId) =>
       '$host/api/order/account/$accountId/all';
 
+  // Admin: reports & ratings
+  static String get adminReports => '$host/api/admin/reports';
+  static String get adminRatings => '$host/api/admin/ratings';
+
   // Organization
   static String get organizations => '$host/api/organization/all';
   static String get organizationCreate => '$host/api/organization/create';
