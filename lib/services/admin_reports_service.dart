@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import '../core/api_constants.dart';
 import 'api_client.dart';
-import 'api_exception.dart';
 
 class AdminReport {
   final int id;
@@ -34,19 +33,19 @@ class AdminReport {
   });
 
   factory AdminReport.fromJson(Map<String, dynamic> json) => AdminReport(
-        id: (json['id'] as num).toInt(),
-        type: (json['type'] ?? '').toString(),
-        description: (json['description'] ?? '').toString(),
-        status: (json['status'] ?? 'Pending').toString(),
-        createdAt: (json['createdAt'] ?? '').toString(),
-        orderId: (json['orderId'] as num).toInt(),
-        orderUser: (json['orderUser'] ?? '').toString(),
-        mealId: (json['mealId'] as num?)?.toInt(),
-        mealName: json['mealName']?.toString(),
-        restaurantId: (json['restaurantId'] as num?)?.toInt(),
-        restaurantName: json['restaurantName']?.toString(),
-        accountId: (json['accountId'] as num).toInt(),
-      );
+    id: (json['id'] as num).toInt(),
+    type: (json['type'] ?? '').toString(),
+    description: (json['description'] ?? '').toString(),
+    status: (json['status'] ?? 'Pending').toString(),
+    createdAt: (json['createdAt'] ?? '').toString(),
+    orderId: (json['orderId'] as num).toInt(),
+    orderUser: (json['orderUser'] ?? '').toString(),
+    mealId: (json['mealId'] as num?)?.toInt(),
+    mealName: json['mealName']?.toString(),
+    restaurantId: (json['restaurantId'] as num?)?.toInt(),
+    restaurantName: json['restaurantName']?.toString(),
+    accountId: (json['accountId'] as num).toInt(),
+  );
 }
 
 class AdminRating {
@@ -69,14 +68,14 @@ class AdminRating {
   });
 
   factory AdminRating.fromJson(Map<String, dynamic> json) => AdminRating(
-        id: (json['id'] as num).toInt(),
-        orderId: (json['orderId'] as num).toInt(),
-        score: (json['score'] as num).toInt(),
-        comment: json['comment']?.toString(),
-        createdAt: (json['createdAt'] ?? '').toString(),
-        orderUser: (json['orderUser'] ?? '').toString(),
-        totalPrice: (json['totalPrice'] as num?)?.toDouble() ?? 0,
-      );
+    id: (json['id'] as num).toInt(),
+    orderId: (json['orderId'] as num).toInt(),
+    score: (json['score'] as num).toInt(),
+    comment: json['comment']?.toString(),
+    createdAt: (json['createdAt'] ?? '').toString(),
+    orderUser: (json['orderUser'] ?? '').toString(),
+    totalPrice: (json['totalPrice'] as num?)?.toDouble() ?? 0,
+  );
 }
 
 class AdminReportsService {
@@ -86,9 +85,11 @@ class AdminReportsService {
     final List<dynamic> list = decoded is List
         ? decoded
         : (decoded is Map && decoded['items'] is List)
-            ? decoded['items'] as List
-            : <dynamic>[];
-    return list.map((e) => AdminReport.fromJson(e as Map<String, dynamic>)).toList();
+        ? decoded['items'] as List
+        : <dynamic>[];
+    return list
+        .map((e) => AdminReport.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<AdminRating>> getRatings() async {
@@ -97,8 +98,10 @@ class AdminReportsService {
     final List<dynamic> list = decoded is List
         ? decoded
         : (decoded is Map && decoded['items'] is List)
-            ? decoded['items'] as List
-            : <dynamic>[];
-    return list.map((e) => AdminRating.fromJson(e as Map<String, dynamic>)).toList();
+        ? decoded['items'] as List
+        : <dynamic>[];
+    return list
+        .map((e) => AdminRating.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

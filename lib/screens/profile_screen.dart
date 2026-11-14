@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
+import '../models/meal.dart';
+import '../services/address_service.dart';
+import '../services/api_exception.dart';
 import '../services/auth_service.dart';
 import '../services/cart_draft.dart';
+import '../services/profile_service.dart';
 import '../services/token_storage.dart';
 import '../services/delivery_profile_storage.dart';
 import '../models/delivery_profile.dart';
@@ -11,6 +15,8 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/primary_button.dart';
 import 'login_screen.dart';
+import 'profile_settings_screen.dart';
+import 'saved_locations_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -23,6 +29,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _username;
   String? _userId;
   bool _isAdmin = false;
+  int _locationCount = 0;
+  double? _totalSpent;
+  String? _loadError;
   DeliveryProfile? _deliveryProfile;
 
   @override
@@ -36,6 +45,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final id = await TokenStorage.readUserId();
     final admin = await TokenStorage.isAdmin();
     final delivery = await DeliveryProfileStorage.read();
+    try {
+      final profile = await ProfileService().getProfile();
+      await TokenStorage.saveUsername(profile.login);
+      await TokenStorage.saveUserId(profile.id.toString());
+      final addresses = await AddressService().getMine();
+      if (!mounted) return;
+      setState(() {
+        _username = profile.login;
+        _userId = profile.id.toString();
+        _isAdmin = admin;
+        _locationCount = addresses.length;
+        _totalSpent = profile.totalSpent;
+        _deliveryProfile = delivery;
+        _loadError = null;
+      });
+      return;
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _loadError = error.message);
+    }
     if (!mounted) return;
     setState(() {
       _username = u;
@@ -79,9 +108,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               controller: phone,
               keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.next,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Phone is required'
-                  : null,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Phone is required' : null,
             ),
             const SizedBox(height: 14),
             AppTextField(
@@ -99,9 +127,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               hint: 'e.g. Tunis',
               controller: city,
               textInputAction: TextInputAction.next,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'City is required'
-                  : null,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'City is required' : null,
             ),
             const SizedBox(height: 14),
             AppTextField(
@@ -109,9 +136,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               hint: 'e.g. Avenue Habib Bourguiba',
               controller: street,
               textInputAction: TextInputAction.next,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Street is required'
-                  : null,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Street is required' : null,
             ),
             const SizedBox(height: 14),
             AppTextField(
@@ -155,8 +181,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: const Text('Profile',
-              style: TextStyle(fontWeight: FontWeight.w800))),
+        title: const Text(
+          'Profile',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -176,14 +205,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   radius: 30,
                   backgroundColor: Colors.white.withValues(alpha: .25),
                   child: Text(
-                    (_username?.isNotEmpty == true
-                            ? _username![0]
-                            : '?')
+                    (_username?.isNotEmpty == true ? _username![0] : '?')
                         .toUpperCase(),
                     style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white),
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -191,15 +219,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_username ?? '…',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800)),
                       Text(
-                          'Account #${_userId ?? '…'} • ${_isAdmin ? 'Admin' : 'Customer'}',
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 13)),
+                        _username ?? '…',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        'Account #${_userId ?? '…'} • ${_isAdmin ? 'Admin' : 'Customer'}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -207,9 +241,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          if (_loadError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Could not refresh account details: $_loadError',
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
           Card(
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: Column(
               children: [
                 ListTile(
@@ -227,21 +270,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ListTile(
                   leading: const Icon(Icons.verified_user_outlined),
                   title: const Text('Role'),
-                  subtitle:
-                      Text(_isAdmin ? 'Administrator' : 'Customer'),
+                  subtitle: Text(_isAdmin ? 'Administrator' : 'Customer'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.account_balance_wallet_outlined),
+                  title: const Text('Total spent'),
+                  subtitle: Text(
+                    _totalSpent == null
+                        ? '…'
+                        : '${Meal.currency}${_totalSpent!.toStringAsFixed(2)}',
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.manage_accounts_outlined),
+                  title: const Text('Profile settings'),
+                  subtitle: const Text('Username and password'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ProfileSettingsScreen(),
+                      ),
+                    );
+                    _load();
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.location_on_outlined),
+                  title: const Text('Saved locations'),
+                  subtitle: Text('$_locationCount delivery locations'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SavedLocationsScreen(),
+                      ),
+                    );
+                    _load();
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: ListTile(
-              leading: const Icon(Icons.location_on_outlined, color: AppColors.primary),
-              title: const Text('Delivery details', style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(_deliveryProfile?.isComplete == true
-                  ? '${_deliveryProfile!.phone}\n${_deliveryProfile!.addressLabel}'
-                  : 'Add once and use automatically at checkout'),
+              leading: const Icon(
+                Icons.location_on_outlined,
+                color: AppColors.primary,
+              ),
+              title: const Text(
+                'Delivery details',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                _deliveryProfile?.isComplete == true
+                    ? '${_deliveryProfile!.phone}\n${_deliveryProfile!.addressLabel}'
+                    : 'Add once and use automatically at checkout',
+              ),
               isThreeLine: _deliveryProfile?.isComplete == true,
               trailing: const Icon(Icons.chevron_right),
               onTap: _editDeliveryProfile,
@@ -254,14 +355,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: ElevatedButton.icon(
               onPressed: _logout,
               icon: const Icon(Icons.logout),
-              label: const Text('Logout',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
+              label: const Text(
+                'Logout',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.error,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(26)),
+                  borderRadius: BorderRadius.circular(26),
+                ),
               ),
             ),
           ),
