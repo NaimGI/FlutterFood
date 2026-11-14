@@ -10,6 +10,7 @@ import '../services/order_service.dart';
 import '../services/token_storage.dart';
 import '../widgets/app_sheet.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_text_field.dart';
 import 'login_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -172,41 +173,167 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Future<void> _rate(Order order) async {
     var score = 5;
     final comment = TextEditingController();
-    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: Text('Rate order #${order.id}'),
-      content: StatefulBuilder(builder: (_, setLocal) => Column(mainAxisSize: MainAxisSize.min, children: [
-        DropdownButtonFormField<int>(initialValue: score, items: List.generate(5, (i) => DropdownMenuItem(value: i + 1, child: Text('${i + 1} stars'))), onChanged: (v) => setLocal(() => score = v ?? score)),
-        TextField(controller: comment, maxLength: 500, decoration: const InputDecoration(labelText: 'Comment (optional)')),
-      ])),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit'))],
-    ));
-    if (confirmed != true) return;
+    final saved = await showAppSheet<bool>(
+      context: context,
+      title: 'Rate order #${order.id}',
+      child: StatefulBuilder(builder: (_, setLocal) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('How was your experience?',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (i) {
+              final filled = i < score;
+              return IconButton(
+                iconSize: 40,
+                onPressed: () => setLocal(() => score = i + 1),
+                icon: Icon(
+                  filled ? Icons.star : Icons.star_border,
+                  color: filled ? const Color(0xFFFFB300) : Colors.grey,
+                ),
+              );
+            }),
+          ),
+          Center(
+            child: Text(
+              score == 1 ? 'Poor' :
+              score == 2 ? 'Fair' :
+              score == 3 ? 'Good' :
+              score == 4 ? 'Very good' : 'Excellent',
+              style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: 16),
+          AppTextField(
+            label: 'Comment (optional)',
+            hint: 'Share your experience…',
+            controller: comment,
+            textInputAction: TextInputAction.done,
+            maxLines: 3,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+              ),
+              child: const Text('Submit rating',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+      )),
+    );
+    if (saved != true) return;
     final accountId = await _accountId();
     if (accountId == null) return;
     setState(() => _busy.add(order.id));
     try {
       await _service.rate(orderId: order.id, accountId: accountId, score: score, comment: comment.text.trim());
       if (mounted) AppSnackbar.success(context, 'Thank you for your rating');
-    } on ApiException catch (e) { if (mounted) AppSnackbar.error(context, e.message); }
-    finally { if (mounted) setState(() => _busy.remove(order.id)); }
+    } on ApiException catch (e) {
+      if (mounted) AppSnackbar.error(context, e.message);
+    } finally {
+      if (mounted) setState(() => _busy.remove(order.id));
+    }
   }
 
   Future<void> _report(Order order) async {
+    final items = _itemsByOrder[order.id] ?? [];
     final description = TextEditingController();
-    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: Text('Report order #${order.id}'),
-      content: TextField(controller: description, minLines: 3, maxLines: 5, maxLength: 1000, decoration: const InputDecoration(hintText: 'Tell us what went wrong')),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send report'))],
-    ));
-    if (confirmed != true || description.text.trim().isEmpty) return;
+    int reportType = 0; // 0 = Order, 1 = Meal
+    int? selectedMealId;
+    final saved = await showAppSheet<bool>(
+      context: context,
+      title: 'Report order #${order.id}',
+      child: StatefulBuilder(builder: (_, setLocal) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('What are you reporting?',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+          const SizedBox(height: 10),
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 0, label: Text('Whole order'), icon: Icon(Icons.receipt_long_outlined)),
+              ButtonSegment(value: 1, label: Text('A meal'), icon: Icon(Icons.fastfood_outlined)),
+            ],
+            selected: {reportType},
+            onSelectionChanged: (s) => setLocal(() => reportType = s.first),
+          ),
+          if (reportType == 1 && items.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            DropdownButtonFormField<int>(
+              initialValue: selectedMealId,
+              decoration: const InputDecoration(labelText: 'Select meal', border: OutlineInputBorder()),
+              items: items.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
+              onChanged: (v) => setLocal(() => selectedMealId = v),
+            ),
+          ],
+          const SizedBox(height: 14),
+          AppTextField(
+            label: 'Description',
+            hint: 'Tell us what went wrong…',
+            controller: description,
+            textInputAction: TextInputAction.done,
+            maxLines: 4,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              onPressed: () {
+                if (description.text.trim().isEmpty) {
+                  AppSnackbar.error(context, 'Description is required');
+                  return;
+                }
+                if (reportType == 1 && selectedMealId == null) {
+                  AppSnackbar.error(context, 'Select a meal');
+                  return;
+                }
+                Navigator.of(context).pop(true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+              ),
+              child: const Text('Send report',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+      )),
+    );
+    if (saved != true || description.text.trim().isEmpty) return;
     final accountId = await _accountId();
     if (accountId == null) return;
     setState(() => _busy.add(order.id));
     try {
-      await _service.report(orderId: order.id, accountId: accountId, type: 0, description: description.text.trim());
+      await _service.report(
+        orderId: order.id,
+        accountId: accountId,
+        type: reportType,
+        description: description.text.trim(),
+        mealId: reportType == 1 ? selectedMealId : null,
+      );
       if (mounted) AppSnackbar.success(context, 'Report sent');
-    } on ApiException catch (e) { if (mounted) AppSnackbar.error(context, e.message); }
-    finally { if (mounted) setState(() => _busy.remove(order.id)); }
+    } on ApiException catch (e) {
+      if (mounted) AppSnackbar.error(context, e.message);
+    } finally {
+      if (mounted) setState(() => _busy.remove(order.id));
+    }
   }
 
   String _money(double v) => '${Meal.currency}${v.toStringAsFixed(2)}';
@@ -278,7 +405,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: _orders.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 14),
+        separatorBuilder: (context, _) => const SizedBox(height: 14),
         itemBuilder: (_, i) {
           if (i == 0) {
             return Container(

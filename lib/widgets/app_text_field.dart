@@ -9,6 +9,8 @@ class AppTextField extends StatefulWidget {
   final String? Function(String?)? validator;
   final TextInputAction textInputAction;
   final TextInputType keyboardType;
+  final int? maxLines;
+  final int? minLines;
 
   const AppTextField({
     super.key,
@@ -19,6 +21,8 @@ class AppTextField extends StatefulWidget {
     this.validator,
     this.textInputAction = TextInputAction.next,
     this.keyboardType = TextInputType.text,
+    this.maxLines,
+    this.minLines,
   });
 
   @override
@@ -47,6 +51,9 @@ class _AppTextFieldState extends State<AppTextField> {
           validator: widget.validator,
           textInputAction: widget.textInputAction,
           keyboardType: widget.keyboardType,
+          // Obscured (password) fields must be single-line.
+          maxLines: widget.isPassword ? 1 : widget.maxLines,
+          minLines: widget.isPassword ? null : widget.minLines,
           decoration: InputDecoration(
             hintText: widget.hint,
             filled: true,

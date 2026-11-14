@@ -10,6 +10,10 @@ import '../services/profile_service.dart';
 import '../services/token_storage.dart';
 import '../services/delivery_profile_storage.dart';
 import '../models/delivery_profile.dart';
+import '../widgets/app_sheet.dart';
+import '../widgets/app_snackbar.dart';
+import '../widgets/app_text_field.dart';
+import '../widgets/primary_button.dart';
 import 'login_screen.dart';
 import 'profile_settings_screen.dart';
 import 'saved_locations_screen.dart';
@@ -87,50 +91,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final city = TextEditingController(text: current?.city ?? '');
     final street = TextEditingController(text: current?.street ?? '');
     final building = TextEditingController(text: current?.building ?? '');
-    final saved = await showDialog<bool>(
+    final formKey = GlobalKey<FormState>();
+
+    final saved = await showAppSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delivery information'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone number'),
-              ),
-              TextField(
-                controller: country,
-                decoration: const InputDecoration(labelText: 'Country'),
-              ),
-              TextField(
-                controller: city,
-                decoration: const InputDecoration(labelText: 'City'),
-              ),
-              TextField(
-                controller: street,
-                decoration: const InputDecoration(labelText: 'Street'),
-              ),
-              TextField(
-                controller: building,
-                decoration: const InputDecoration(
-                  labelText: 'Building / apartment',
-                ),
-              ),
-            ],
-          ),
+      title: 'Delivery information',
+      child: Form(
+        key: formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppTextField(
+              label: 'Phone number',
+              hint: 'e.g. +216 55 123 456',
+              controller: phone,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Phone is required' : null,
+            ),
+            const SizedBox(height: 14),
+            AppTextField(
+              label: 'Country',
+              hint: 'e.g. Tunisia',
+              controller: country,
+              textInputAction: TextInputAction.next,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Country is required'
+                  : null,
+            ),
+            const SizedBox(height: 14),
+            AppTextField(
+              label: 'City',
+              hint: 'e.g. Tunis',
+              controller: city,
+              textInputAction: TextInputAction.next,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'City is required' : null,
+            ),
+            const SizedBox(height: 14),
+            AppTextField(
+              label: 'Street',
+              hint: 'e.g. Avenue Habib Bourguiba',
+              controller: street,
+              textInputAction: TextInputAction.next,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Street is required' : null,
+            ),
+            const SizedBox(height: 14),
+            AppTextField(
+              label: 'Building / apartment',
+              hint: 'e.g. Apt 4, 2nd floor',
+              controller: building,
+              textInputAction: TextInputAction.done,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Building is required'
+                  : null,
+            ),
+            const SizedBox(height: 20),
+            PrimaryButton(
+              text: 'Save delivery details',
+              onPressed: () {
+                if (!(formKey.currentState?.validate() ?? false)) return;
+                Navigator.of(context).pop(true);
+              },
+            ),
+            const SizedBox(height: 4),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
     if (saved != true) return;
@@ -145,6 +174,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     await DeliveryProfileStorage.save(updated);
     if (mounted) setState(() => _deliveryProfile = updated);
+    if (mounted) AppSnackbar.success(context, 'Delivery details saved');
   }
 
   @override

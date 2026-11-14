@@ -94,12 +94,15 @@ class ManageMealScreenState extends State<ManageMealScreen> {
   }
 
   Future<void> _openForm({Meal? existing}) async {
-    if (_restaurantId == null) return;
     final changed = await showAppSheet<bool>(
       context: context,
       title: existing != null ? 'Edit meal' : 'Add meal',
       child: _MealFormBody(
-          restaurantId: _restaurantId!, meal: existing),
+          restaurants: _all,
+          initialRestaurantId: existing == null
+              ? _restaurantId
+              : null,
+          meal: existing),
     );
     if (changed == true) _loadMeals();
   }
@@ -220,7 +223,7 @@ class ManageMealScreenState extends State<ManageMealScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.only(bottom: 80),
         itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        separatorBuilder: (context, _) => const SizedBox(height: 10),
         itemBuilder: (_, i) {
           final m = items[i];
           final busy = _busy.contains(m.id);
@@ -235,7 +238,7 @@ class ManageMealScreenState extends State<ManageMealScreen> {
                   height: 48,
                   child: Image.network(m.imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (context, error, stackTrace) => Container(
                           color: AppColors.fieldFill,
                           child: const Icon(Icons.fastfood,
                               color: Colors.grey))),
@@ -277,10 +280,15 @@ class ManageMealScreenState extends State<ManageMealScreen> {
 }
 
 class _MealFormBody extends StatefulWidget {
-  final int restaurantId;
+  final List<Restaurant> restaurants;
+  final int? initialRestaurantId;
   final Meal? meal;
 
-  const _MealFormBody({required this.restaurantId, this.meal});
+  const _MealFormBody({
+    required this.restaurants,
+    this.initialRestaurantId,
+    this.meal,
+  });
 
   @override
   State<_MealFormBody> createState() => _MealFormBodyState();
@@ -292,6 +300,7 @@ class _MealFormBodyState extends State<_MealFormBody> {
   late final TextEditingController _descCtrl;
   late final TextEditingController _priceCtrl;
   late final TextEditingController _imgCtrl;
+  int? _restaurantId;
   bool _loading = false;
   CalorieEstimate? _estimate;
 
@@ -306,6 +315,8 @@ class _MealFormBodyState extends State<_MealFormBody> {
     _priceCtrl = TextEditingController(
         text: widget.meal != null ? '${widget.meal!.price}' : '');
     _imgCtrl = TextEditingController();
+    _restaurantId = widget.initialRestaurantId ??
+        (widget.restaurants.isNotEmpty ? widget.restaurants.first.id : null);
   }
 
   @override
@@ -319,6 +330,10 @@ class _MealFormBodyState extends State<_MealFormBody> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_restaurantId == null) {
+      AppSnackbar.error(context, 'Select a restaurant');
+      return;
+    }
     setState(() => _loading = true);
     try {
       final name = _nameCtrl.text.trim();
@@ -340,7 +355,7 @@ class _MealFormBodyState extends State<_MealFormBody> {
             description: desc.isEmpty ? '-' : desc,
             price: price,
             imageUrl: img.isEmpty ? null : img,
-            restaurantId: widget.restaurantId);
+            restaurantId: _restaurantId!);
       }
       if (!mounted) return;
       AppSnackbar.success(context,
@@ -380,6 +395,21 @@ class _MealFormBodyState extends State<_MealFormBody> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          DropdownButtonFormField<int>(
+            initialValue: _restaurantId,
+            decoration: const InputDecoration(
+              labelText: 'Restaurant',
+              border: OutlineInputBorder(),
+            ),
+            items: widget.restaurants
+                .map((r) => DropdownMenuItem(
+                    value: r.id,
+                    child: Text('${r.name} (${r.category})')))
+                .toList(),
+            onChanged: (v) => setState(() => _restaurantId = v),
+            validator: (v) => v == null ? 'Select a restaurant' : null,
+          ),
+          const SizedBox(height: 12),
           AppTextField(
               label: 'Name',
               hint: 'e.g. Margherita',
